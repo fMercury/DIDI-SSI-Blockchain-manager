@@ -120,6 +120,40 @@ export class BlockchainManager {
   }
 
   /**
+   * Gets an DID attribute
+   * @param {string}  identity  DID to set the attribute in
+   * @param {string}  key  Attribute key
+   */
+  async getAttribute(identity: string, key: string) {
+    const identityAddr = BlockchainManager.getDidAddress(identity);
+    const options: Options = {from: identityAddr, gasPrice: undefined, gas: undefined};
+    const contract = BlockchainManager.getDidContract(options);
+    const keyBytes = web3.utils.fromAscii(key);
+
+    let previousChange = await contract.methods.changed(identityAddr).call();
+    let event;
+    while (parseInt(previousChange)) {
+      const events = await contract.getPastEvents("DIDAttributeChanged", {
+        fromBlock: previousChange, toBlock: previousChange,
+        filter: {identity: identityAddr}
+      });
+
+      if (events.length == 0)
+        return undefined;
+
+      event = events[0].returnValues;
+      previousChange = 0;
+      const eventKeyBytes = event.name.substring(0, keyBytes.length);
+      if (eventKeyBytes !== keyBytes) {
+        previousChange = event.previousChange;
+        event = undefined;
+      }
+    }
+
+    return event;
+  }
+
+  /**
    * Creates a JWT from a base payload with the information to encode
    * @param {string}  issuerDid  Issuer DID
    * @param {object}  payload  Information of the JWT
